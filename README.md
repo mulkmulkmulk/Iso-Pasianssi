@@ -6,7 +6,7 @@ Selainpohjainen pasianssipeli, jossa kaikki 52 korttia jaetaan neljään riviin.
 
 Peli toimii GitHub Pagesissa:
 
-https://mulkmulkmulk.github.io/iso-pasianssi/
+[https://mulkmulkmulk.github.io/iso-pasianssi/](https://mulkmulkmulk.github.io/Iso-Pasianssi/)
 
 ## Säännöt
 
