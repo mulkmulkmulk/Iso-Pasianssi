@@ -1,0 +1,1189 @@
+<!doctype html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Iso pasianssi</title>
+  <style>
+    :root {
+      --card-w: 82px;
+      --card-h: 112px;
+      --gap: 8px;
+      --felt: #0d6b3a;
+      --felt-dark: #084727;
+      --slot: rgba(255,255,255,.22);
+      --slot-good: rgba(255, 235, 130, .75);
+      --card-radius: 9px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, var(--felt), var(--felt-dark));
+      color: white;
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .titlebar {
+      padding: 18px 22px 8px;
+      text-align: center;
+      background: linear-gradient(to bottom, rgba(0,0,0,.24), rgba(0,0,0,0));
+    }
+
+    h1 {
+      font-size: clamp(36px, 5.2vw, 72px);
+      margin: 0;
+      font-weight: 950;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: #ffe39a;
+      text-shadow: 0 4px 0 rgba(0,0,0,.22), 0 10px 28px rgba(0,0,0,.35);
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font-weight: 900;
+      font-size: 15px;
+      cursor: pointer;
+      background: #f2f2f2;
+      color: #111;
+      box-shadow: 0 4px 12px rgba(0,0,0,.28);
+    }
+
+    button.primary {
+      background: linear-gradient(#fff4b8, #f2c64c);
+      color: #171000;
+      font-size: 17px;
+    }
+
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    #game {
+      position: relative;
+      width: 100vw;
+      height: calc(100vh - 96px);
+      padding: 8px 20px 28px;
+      overflow: auto;
+    }
+
+    .table-layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      min-width: calc(13 * var(--card-w) + 12 * var(--gap) + 220px);
+    }
+
+    .board {
+      display: grid;
+      gap: 16px;
+      min-width: calc(13 * var(--card-w) + 12 * var(--gap));
+    }
+
+    .card-row {
+      display: grid;
+      grid-template-columns: repeat(13, var(--card-w));
+      gap: var(--gap);
+      min-height: var(--card-h);
+    }
+
+    .cell {
+      position: relative;
+      width: var(--card-w);
+      height: var(--card-h);
+      border-radius: var(--card-radius);
+    }
+
+    .cell::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: 2px dashed var(--slot);
+      border-radius: var(--card-radius);
+      background: rgba(255,255,255,.035);
+    }
+
+    .cell.legal::before {
+      border-color: var(--slot-good);
+      box-shadow: 0 0 0 3px rgba(255,235,130,.18), inset 0 0 22px rgba(255,235,130,.14);
+    }
+
+    .cell.locked::after {
+      content: "✓";
+      position: absolute;
+      right: 5px;
+      bottom: 3px;
+      font-size: 15px;
+      color: rgba(255,255,255,.75);
+      text-shadow: 0 1px 2px rgba(0,0,0,.6);
+      pointer-events: none;
+    }
+
+    .card {
+      position: absolute;
+      width: var(--card-w);
+      height: var(--card-h);
+      background: transparent;
+      color: #111;
+      border-radius: var(--card-radius);
+      border: 0;
+      box-shadow: 0 4px 10px rgba(0,0,0,.30);
+      cursor: pointer;
+      touch-action: none;
+      overflow: visible;
+      padding: 0;
+    }
+
+    .card:active { cursor: pointer; }
+    .card.dragging { opacity: .96; transform: scale(1.045); z-index: 9999 !important; }
+    .card.selected {
+      transform: translateY(-8px) scale(1.06);
+      outline: 4px solid #ffe66d;
+      outline-offset: 3px;
+      box-shadow: 0 0 0 5px rgba(255,230,109,.25), 0 10px 24px rgba(0,0,0,.45);
+      z-index: 500 !important;
+    }
+    .card.red { color: #c40000; }
+
+    .card-image {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .card.dealing, .card.removing-ace {
+      pointer-events: none;
+    }
+
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      font-family: Georgia, "Times New Roman", serif;
+      pointer-events: none;
+    }
+
+    .corner {
+      position: absolute;
+      width: 18px;
+      text-align: center;
+      line-height: .86;
+      font-weight: 900;
+      letter-spacing: -.08em;
+    }
+
+    .corner .rank { display: block; font-size: 18px; }
+    .corner .suit { display: block; font-size: 17px; margin-top: 2px; }
+    .corner.top { top: 7px; left: 7px; }
+    .corner.bottom { right: 7px; bottom: 7px; transform: rotate(180deg); }
+
+    .pip-area {
+      position: absolute;
+      left: 19px;
+      right: 19px;
+      top: 16px;
+      bottom: 16px;
+    }
+
+    .pip {
+      position: absolute;
+      width: 19px;
+      height: 19px;
+      display: grid;
+      place-items: center;
+      font-size: 23px;
+      line-height: 1;
+      font-weight: 900;
+      transform: translate(-50%, -50%);
+    }
+
+    .pip.flip { transform: translate(-50%, -50%) rotate(180deg); }
+
+    .pip.x1 { left: 50%; }
+    .pip.xl { left: 23%; }
+    .pip.xr { left: 77%; }
+    .pip.y1 { top: 9%; }
+    .pip.y2 { top: 24%; }
+    .pip.y3 { top: 37%; }
+    .pip.y4 { top: 50%; }
+    .pip.y5 { top: 63%; }
+    .pip.y6 { top: 76%; }
+    .pip.y7 { top: 91%; }
+
+    .face-art {
+      position: absolute;
+      left: 20px;
+      right: 20px;
+      top: 18px;
+      bottom: 18px;
+      border: 2px solid #1a1a1a;
+      background: #fffdf4;
+      overflow: hidden;
+    }
+
+    .face-art svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .face-center-suit {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      transform: translate(-50%, -50%);
+      font-size: 27px;
+      line-height: 1;
+      font-weight: 900;
+      color: currentColor;
+      text-shadow: 0 1px 0 #fff;
+    }
+
+    .face-art.queen .crown { fill: #d4af37; }
+    .face-art.king .crown { fill: #e0b21c; }
+    .face-art.jack .crown { fill: #c33232; }
+    .mini-card {
+      width: 38px;
+      height: 50px;
+      border-radius: 5px;
+      background: #fbfbfb;
+      color: #111;
+      display: grid;
+      place-items: center;
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 900;
+      line-height: .85;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25), inset 0 0 0 2px #fff;
+      border: 1px solid rgba(0,0,0,.18);
+    }
+
+    .mini-card.red { color: #c40000; }
+
+    .mini-card span { display: block; text-align: center; }
+
+    .mini-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .side-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 18px;
+      color: rgba(255,255,255,.86);
+      font-size: 14px;
+    }
+
+    .cell.filled::before {
+      display: none;
+    }
+
+    #acePile {
+      position: relative;
+      width: var(--card-w);
+      height: var(--card-h);
+      pointer-events: none;
+      margin: 14px auto 0;
+    }
+
+    #acePile::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      border: 2px dashed rgba(255,255,255,.24);
+      border-radius: var(--card-radius);
+      background: rgba(255,255,255,.035);
+    }
+
+    #acePile .card {
+      position: absolute;
+      left: 0;
+      top: 0;
+      cursor: default;
+      box-shadow: 0 3px 8px rgba(0,0,0,.28);
+    }
+
+    .controls {
+      width: 190px;
+      min-height: calc(4 * var(--card-h) + 3 * 16px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.20);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.12), 0 10px 28px rgba(0,0,0,.20);
+    }
+
+    .status {
+      min-height: 52px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.08);
+      font-weight: 750;
+      line-height: 1.25;
+    }
+
+    .rules {
+      max-width: 1120px;
+      margin: 24px 0 0;
+      padding: 18px 20px;
+      border-radius: 18px;
+      background: rgba(0,0,0,.22);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);
+    }
+
+    .rules h2 { margin: 0 0 12px; color: #ffe39a; font-size: 24px; }
+    .rule-grid { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)); gap: 16px; }
+    .rules h3 { margin: 0 0 6px; font-size: 16px; }
+    .rules p { margin: 0; opacity: .92; line-height: 1.38; font-size: 14px; }
+    .rules .examples { margin-top: 8px; color: #ffe39a; }
+
+    .support {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 18px 0 8px;
+      font-weight: 800;
+      opacity: .95;
+    }
+
+    .kofi {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: #fff;
+      color: #111;
+      text-decoration: none;
+      font-size: 27px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.32);
+    }
+
+    .win-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      pointer-events: none;
+      background: rgba(0,0,0,.18);
+      z-index: 10000;
+    }
+
+    .win-overlay.show { display: grid; }
+
+    .win-card {
+      position: relative;
+      min-width: 320px;
+      padding: 34px 42px;
+      border-radius: 24px;
+      text-align: center;
+      background: linear-gradient(180deg, #fff6c9, #ffd65d);
+      color: #241600;
+      box-shadow: 0 20px 60px rgba(0,0,0,.45);
+      overflow: visible;
+    }
+
+    .win-card h2 { margin: 0; font-size: 56px; line-height: 1; }
+    .win-card p { margin: 10px 0 0; font-weight: 900; }
+
+    .spark {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: firework 1200ms ease-out forwards;
+    }
+
+    @keyframes firework {
+      from { transform: translate(-50%, -50%) scale(.5); opacity: 1; }
+      to { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(.08); opacity: 0; }
+    }
+
+    @media (max-width: 900px) {
+      .table-layout { flex-direction: column; min-width: calc(13 * var(--card-w) + 12 * var(--gap)); }
+      .controls { width: min(100%, 420px); min-height: 0; flex-direction: row; flex-wrap: wrap; align-items: center; }
+      #acePile { margin: 0; }
+      .rule-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="titlebar">
+    <h1>Iso pasianssi</h1>
+  </header>
+
+  <main id="game">
+    <div class="table-layout">
+      <section class="board" id="board" aria-label="Pelikenttä"></section>
+
+      <aside class="controls" aria-label="Pelin toiminnot">
+        <button id="newGame" class="primary">Uusi peli</button>
+        <button id="redeal">Reset / uudelleenjako</button>
+        <div id="status" class="status">Paina Uusi peli aloittaaksesi.</div>
+        <div id="acePile" aria-label="Ässäpino"></div>
+      </aside>
+    </div>
+
+    <section class="rules" aria-label="Säännöt">
+      <h2>Säännöt</h2>
+      <div class="rule-grid">
+        <div>
+          <h3>Tavoite</h3>
+          <p>Järjestä jokaiselle riville yhden maan kortit järjestykseen <strong>2–K</strong>.</p>
+        </div>
+        <div>
+          <h3>Siirrot</h3>
+          <p>Valitse kortti napsauttamalla sitä ja napsauta sitten tyhjää paikkaa. Vasemman reunan aukkoon voi siirtää vain <strong>2:n</strong>. Muuhun aukkoon voi siirtää vain <strong>saman maan seuraavan kortin</strong>.</p>
+          <p class="examples">Esim. ♠2 rivin alkuun, ♥8 → ♥7:n oikealle puolelle, ♦Q → ♦J:n oikealle puolelle.</p>
+        </div>
+        <div>
+          <h3>Uudelleenjako</h3>
+          <p>Kun siirtoja ei enää ole, käytä <strong>Reset</strong>-painiketta. Valmiit korttiketjut jäävät paikoilleen ja muut kortit jaetaan uudelleen. Uudelleenjaon voi tehdä <strong>2 kertaa</strong>.</p>
+        </div>
+        <div>
+          <h3>Voitto</h3>
+          <p>Voitat, kun jokaisella rivillä on yhden maan kortit järjestyksessä <strong>2, 3, 4, …, K</strong>.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="support">
+      <span>Tykkäsitkö pelistä? Tue kehitystä</span>
+      <a class="kofi" href="https://ko-fi.com/mulkmulkmulk" target="_blank" rel="noopener" aria-label="Tue Ko-fissa">☕</a>
+    </footer>
+
+    <div id="winOverlay" class="win-overlay" aria-hidden="true">
+      <div class="win-card">
+        <div class="win-burst" id="winBurst"></div>
+        <h2>Voitto!</h2>
+        <p>Kaikki maat ovat riveissä 2–K.</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const game = document.querySelector('#game');
+    const board = document.querySelector('#board');
+    const acePile = document.querySelector('#acePile');
+    const newGameButton = document.querySelector('#newGame');
+    const redealButton = document.querySelector('#redeal');
+    const statusText = document.querySelector('#status');
+    const winOverlay = document.querySelector('#winOverlay');
+    const winBurst = document.querySelector('#winBurst');
+
+    const suits = [
+      { symbol: '♠', name: 'spades', red: false },
+      { symbol: '♥', name: 'hearts', red: true },
+      { symbol: '♦', name: 'diamonds', red: true },
+      { symbol: '♣', name: 'clubs', red: false },
+    ];
+    const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+
+    let cards = [];
+    let grid = [];
+    let aces = [];
+    let redealsLeft = 2;
+    let drag = null;
+    let highestZ = 100;
+    let gameOver = false;
+    let isAnimating = false;
+    let selectedCard = null;
+
+    function createDeck() {
+      return suits.flatMap(suit => ranks.map((rank, index) => ({
+        id: `${rank}${suit.symbol}`,
+        rank,
+        value: index + 1,
+        suit: suit.name,
+        symbol: suit.symbol,
+        red: suit.red,
+        row: null,
+        col: null,
+        el: null,
+      })));
+    }
+
+    function shuffle(deck) {
+      const copy = [...deck];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function setupBoard() {
+      board.innerHTML = '';
+      grid = Array.from({ length: 4 }, () => Array(13).fill(null));
+
+      for (let row = 0; row < 4; row++) {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'card-row';
+        for (let col = 0; col < 13; col++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = String(row);
+          cell.dataset.col = String(col);
+          cell.addEventListener('click', onCellClick);
+          rowEl.appendChild(cell);
+        }
+        board.appendChild(rowEl);
+      }
+    }
+
+
+    function cardImagePath(card) {
+      const suitName = card.suit;
+      const rankName = { A: 'ace', J: 'jack', Q: 'queen', K: 'king' }[card.rank] || card.rank;
+      const faceSuffix = card.value >= 11 ? '2' : '';
+      return `svgcard/${rankName}_of_${suitName}${faceSuffix}.svg`;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function makeCardElement(card) {
+      const el = document.createElement('div');
+      el.className = `card ${card.red ? 'red' : ''}`;
+      el.dataset.cardId = card.id;
+      el.innerHTML = `<img class="card-image" src="${cardImagePath(card)}" alt="${card.rank} ${card.symbol}" draggable="false">`;
+      el.addEventListener('click', onCardClick);
+      return el;
+    }
+
+    function renderCardFace(card) {
+      const corner = `
+        <div class="corner top"><span class="rank">${card.rank}</span><span class="suit">${card.symbol}</span></div>
+        <div class="corner bottom"><span class="rank">${card.rank}</span><span class="suit">${card.symbol}</span></div>
+      `;
+
+      if (card.value >= 11) {
+        return `
+          <div class="card-inner">
+            ${corner}
+            ${renderFaceArt(card)}
+          </div>
+        `;
+      }
+
+      const pipLayouts = {
+        2: [['x1','y2'], ['x1','y6','flip']],
+        3: [['x1','y2'], ['x1','y4'], ['x1','y6','flip']],
+        4: [['xl','y2'], ['xr','y2'], ['xl','y6','flip'], ['xr','y6','flip']],
+        5: [['xl','y2'], ['xr','y2'], ['x1','y4'], ['xl','y6','flip'], ['xr','y6','flip']],
+        6: [['xl','y2'], ['xr','y2'], ['xl','y4'], ['xr','y4'], ['xl','y6','flip'], ['xr','y6','flip']],
+        7: [['xl','y1'], ['xr','y1'], ['x1','y2'], ['xl','y4'], ['xr','y4'], ['xl','y7','flip'], ['xr','y7','flip']],
+        8: [['xl','y1'], ['xr','y1'], ['x1','y2'], ['xl','y3'], ['xr','y3'], ['xl','y5','flip'], ['xr','y5','flip'], ['x1','y6','flip']],
+        9: [['xl','y1'], ['xr','y1'], ['xl','y3'], ['xr','y3'], ['x1','y4'], ['xl','y5','flip'], ['xr','y5','flip'], ['xl','y7','flip'], ['xr','y7','flip']],
+        10: [['xl','y1'], ['xr','y1'], ['x1','y2'], ['xl','y3'], ['xr','y3'], ['xl','y5','flip'], ['xr','y5','flip'], ['x1','y6','flip'], ['xl','y7','flip'], ['xr','y7','flip']],
+      };
+
+      const pips = pipLayouts[card.value].map(parts => (
+        `<div class="pip ${parts.join(' ')}">${card.symbol}</div>`
+      )).join('');
+
+      return `<div class="card-inner">${corner}<div class="pip-area">${pips}</div></div>`;
+    }
+
+    function renderFaceArt(card) {
+      const faceClass = card.rank === 'J' ? 'jack' : card.rank === 'Q' ? 'queen' : 'king';
+      const hair = card.rank === 'Q' ? '#f3d15d' : card.rank === 'K' ? '#d8d8d8' : '#57321d';
+      const robe = card.red ? '#c4161c' : '#244a93';
+      const accent = card.red ? '#244a93' : '#c4161c';
+      const weapon = card.rank === 'J'
+        ? '<path d="M62 18 L67 18 L63 77 L58 77 Z" fill="#d9d9d9" stroke="#111" stroke-width="1.2"/><path d="M56 31 L69 31" stroke="#111" stroke-width="2"/>'
+        : card.rank === 'Q'
+          ? '<path d="M61 35 C70 42 72 58 62 69" fill="none" stroke="#d4af37" stroke-width="4"/><circle cx="62" cy="35" r="4" fill="#d4af37" stroke="#111" stroke-width="1"/>'
+          : '<path d="M61 25 L68 70" stroke="#111" stroke-width="3"/><path d="M58 24 L68 21 L71 28 L62 30 Z" fill="#d9d9d9" stroke="#111" stroke-width="1.2"/>';
+
+      return `
+        <div class="face-art ${faceClass}">
+          <svg viewBox="0 0 80 112" aria-hidden="true">
+            <rect x="0" y="0" width="80" height="112" fill="#fffdf4"/>
+            <path d="M0 0 L80 0 L0 112 Z" fill="#f7f1dc"/>
+            <path d="M0 112 L80 112 L80 0 Z" fill="#fdfdfd"/>
+
+            <g transform="translate(0 0)">
+              <path d="M17 105 C17 74 24 56 40 56 C56 56 63 74 63 105 Z" fill="${robe}" stroke="#111" stroke-width="2"/>
+              <path d="M25 105 L35 59 L45 59 L55 105" fill="${accent}" opacity=".95" stroke="#111" stroke-width="1"/>
+              <path d="M22 77 H58" stroke="#f3d15d" stroke-width="4"/>
+              <path d="M26 91 H54" stroke="#f3d15d" stroke-width="3"/>
+              <path d="M20 104 H60" stroke="#111" stroke-width="2"/>
+              ${weapon}
+              <path d="M25 28 C25 15 55 15 55 28 L52 51 C49 61 31 61 28 51 Z" fill="${hair}" stroke="#111" stroke-width="2"/>
+              <ellipse cx="40" cy="40" rx="17" ry="20" fill="#ffe2b5" stroke="#111" stroke-width="1.8"/>
+              <path class="crown" d="M23 24 L29 10 L36 22 L40 9 L45 22 L52 10 L57 24 Z" stroke="#111" stroke-width="1.8"/>
+              <path d="M30 37 H36 M44 37 H50" stroke="#111" stroke-width="2" stroke-linecap="round"/>
+              <path d="M40 39 L37 47 H42" fill="none" stroke="#111" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M34 52 C38 56 44 56 48 52" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M27 62 C35 70 45 70 53 62" fill="none" stroke="#111" stroke-width="2"/>
+            </g>
+
+            <g transform="translate(80 112) rotate(180)">
+              <path d="M17 105 C17 74 24 56 40 56 C56 56 63 74 63 105 Z" fill="${robe}" stroke="#111" stroke-width="2"/>
+              <path d="M25 105 L35 59 L45 59 L55 105" fill="${accent}" opacity=".95" stroke="#111" stroke-width="1"/>
+              <path d="M22 77 H58" stroke="#f3d15d" stroke-width="4"/>
+              <path d="M26 91 H54" stroke="#f3d15d" stroke-width="3"/>
+              <path d="M20 104 H60" stroke="#111" stroke-width="2"/>
+              ${weapon}
+              <path d="M25 28 C25 15 55 15 55 28 L52 51 C49 61 31 61 28 51 Z" fill="${hair}" stroke="#111" stroke-width="2"/>
+              <ellipse cx="40" cy="40" rx="17" ry="20" fill="#ffe2b5" stroke="#111" stroke-width="1.8"/>
+              <path class="crown" d="M23 24 L29 10 L36 22 L40 9 L45 22 L52 10 L57 24 Z" stroke="#111" stroke-width="1.8"/>
+              <path d="M30 37 H36 M44 37 H50" stroke="#111" stroke-width="2" stroke-linecap="round"/>
+              <path d="M40 39 L37 47 H42" fill="none" stroke="#111" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M34 52 C38 56 44 56 48 52" fill="none" stroke="#111" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M27 62 C35 70 45 70 53 62" fill="none" stroke="#111" stroke-width="2"/>
+            </g>
+          </svg>
+          <div class="face-center-suit">${card.symbol}</div>
+        </div>
+      `;
+    }
+
+    function cellAt(row, col) {
+      return document.querySelector(`.cell[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    function placeCard(card, row, col) {
+      grid[row][col] = card;
+      card.row = row;
+      card.col = col;
+      if (!card.el) card.el = makeCardElement(card);
+      const cell = cellAt(row, col);
+      cell.appendChild(card.el);
+      cell.classList.add('filled');
+      positionInCell(card);
+    }
+
+    function removeCard(card) {
+      if (selectedCard === card) clearSelection();
+      if (card.row !== null && card.col !== null && grid[card.row][card.col] === card) {
+        grid[card.row][card.col] = null;
+        cellAt(card.row, card.col).classList.remove('filled');
+      }
+      card.row = null;
+      card.col = null;
+      card.el?.remove();
+    }
+
+    function positionInCell(card) {
+      card.el.style.left = '0px';
+      card.el.style.top = '0px';
+      card.el.style.zIndex = '10';
+    }
+
+    async function newGame() {
+      if (isAnimating) return;
+      isAnimating = true;
+      newGameButton.disabled = true;
+      redealButton.disabled = true;
+      statusText.textContent = 'Jaetaan kortteja...';
+      hideWinCelebration();
+      clearSelection();
+
+      setupBoard();
+      acePile.innerHTML = '';
+      cards = createDeck();
+      aces = [];
+      redealsLeft = 2;
+      gameOver = false;
+
+      await sleep(350);
+
+      const deck = shuffle(cards);
+      const animations = [];
+      let i = 0;
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 13; col++) {
+          const card = deck[i];
+          placeCard(card, row, col);
+          animations.push(animateDeal(card, i));
+          i++;
+        }
+      }
+
+      await Promise.all(animations);
+      statusText.textContent = 'Poistetaan ässät...';
+      await removeAcesAnimated();
+      clearLocks();
+
+      isAnimating = false;
+      newGameButton.disabled = false;
+      updateStatus();
+    }
+
+    function animateDeal(card, index) {
+      const el = card.el;
+      const cellRect = cellAt(card.row, card.col).getBoundingClientRect();
+      const pileRect = acePile.getBoundingClientRect();
+      const startX = pileRect.left - cellRect.left;
+      const startY = pileRect.top - cellRect.top;
+      el.classList.add('dealing');
+      el.style.zIndex = String(1000 + index);
+      el.style.opacity = '0';
+      const animation = el.animate([
+        { transform: `translate(${startX}px, ${startY}px) scale(.72) rotate(${(index % 7 - 3) * 2}deg)`, opacity: 0 },
+        { transform: 'translate(0, 0) scale(1) rotate(0deg)', opacity: 1 }
+      ], {
+        duration: 1260,
+        delay: index * 96,
+        easing: 'cubic-bezier(.18,.8,.28,1)'
+      });
+      return animation.finished.finally(() => {
+        el.classList.remove('dealing');
+        el.style.transform = '';
+        el.style.opacity = '';
+        positionInCell(card);
+      });
+    }
+
+    async function removeAcesAnimated() {
+      aces = [];
+      const aceCards = cards.filter(card => card.value === 1 && card.row !== null);
+      const animations = aceCards.map((card, index) => animateAceRemoval(card, index));
+      await Promise.all(animations);
+
+      for (const card of aceCards) {
+        detachCardFromGrid(card);
+        if (!aces.includes(card)) aces.push(card);
+      }
+      for (const card of cards) {
+        if (card.value === 1 && !aces.includes(card)) aces.push(card);
+      }
+      renderAces();
+    }
+
+    function detachCardFromGrid(card) {
+      if (card.row !== null && card.col !== null && grid[card.row][card.col] === card) {
+        grid[card.row][card.col] = null;
+        cellAt(card.row, card.col).classList.remove('filled');
+      }
+      card.row = null;
+      card.col = null;
+    }
+
+    function animateAceRemoval(card, index) {
+      const el = card.el;
+      const fromRect = el.getBoundingClientRect();
+      const pileRect = acePile.getBoundingClientRect();
+      const dx = pileRect.left - fromRect.left + index * 2;
+      const dy = pileRect.top - fromRect.top + index * 2;
+      el.classList.add('removing-ace');
+      el.style.zIndex = String(++highestZ);
+      const animation = el.animate([
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+        { transform: `translate(${dx * .45}px, ${dy * .45 - 24}px) scale(.92)`, opacity: .96 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.86)`, opacity: 1 }
+      ], {
+        duration: 1200,
+        delay: index * 300,
+        easing: 'cubic-bezier(.2,.75,.25,1)',
+        fill: 'forwards'
+      });
+      return animation.finished;
+    }
+
+    function removeAces() {
+      aces = [];
+      for (const card of cards) {
+        if (card.value === 1 && card.row !== null) {
+          removeCard(card);
+          aces.push(card);
+        } else if (card.value === 1 && !aces.includes(card)) {
+          aces.push(card);
+        }
+      }
+      renderAces();
+    }
+
+    function renderAces() {
+      acePile.innerHTML = '';
+      aces.forEach((card, index) => {
+        if (!card.el) card.el = makeCardElement(card);
+        card.el.getAnimations().forEach(animation => animation.cancel());
+        card.el.classList.remove('dragging', 'dealing', 'removing-ace', 'selected');
+        card.el.style.left = `${index * 2}px`;
+        card.el.style.top = `${index * 2}px`;
+        card.el.style.zIndex = String(20 + index);
+        card.el.style.transform = '';
+        card.el.style.opacity = '';
+        acePile.appendChild(card.el);
+      });
+    }
+
+    function isLegalMove(card, row, col) {
+      if (gameOver) return false;
+      if (card.value === 1) return false;
+      if (grid[row][col] !== null) return false;
+
+      if (col === 0) return card.value === 2;
+
+      const left = grid[row][col - 1];
+      if (!left) return false;
+      if (left.value >= 13) return false;
+      return left.suit === card.suit && card.value === left.value + 1;
+    }
+
+    function onCardClick(event) {
+      if (gameOver || isAnimating) return;
+      event.stopPropagation();
+      const el = event.currentTarget;
+      const card = cards.find(c => c.id === el.dataset.cardId);
+      if (!card || card.value === 1 || card.row === null || card.col === null) return;
+
+      if (selectedCard === card) {
+        clearSelection();
+        updateStatus();
+        return;
+      }
+
+      selectCard(card);
+      statusText.textContent = `Valittu ${card.rank}${card.symbol}. Klikkaa korostettua aukkoa.`;
+    }
+
+    function onCellClick(event) {
+      if (gameOver || isAnimating || !selectedCard) return;
+      const cell = event.currentTarget;
+      const row = Number(cell.dataset.row);
+      const col = Number(cell.dataset.col);
+      const card = selectedCard;
+
+      if (!isLegalMove(card, row, col)) {
+        statusText.textContent = `Tähän aukkoon ei voi siirtää korttia ${card.rank}${card.symbol}.`;
+        return;
+      }
+
+      const oldRow = card.row;
+      const oldCol = card.col;
+      grid[oldRow][oldCol] = null;
+      cellAt(oldRow, oldCol).classList.remove('filled');
+      clearSelection();
+      placeCard(card, row, col);
+      checkWin();
+      updateStatus();
+    }
+
+    function selectCard(card) {
+      clearSelection();
+      selectedCard = card;
+      card.el.classList.add('selected');
+      showLegalTargets(card);
+    }
+
+    function clearSelection() {
+      if (selectedCard?.el) selectedCard.el.classList.remove('selected');
+      selectedCard = null;
+      clearLegalTargets();
+    }
+
+    function startDrag(event) {
+      if (gameOver || isAnimating) return;
+      const el = event.currentTarget;
+      const card = cards.find(c => c.id === el.dataset.cardId);
+      if (!card || card.value === 1) return;
+
+      const rect = el.getBoundingClientRect();
+      const gameRect = game.getBoundingClientRect();
+
+      drag = {
+        card,
+        el,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+        originalRow: card.row,
+        originalCol: card.col,
+        originalParent: el.parentElement,
+        originalLeft: el.style.left,
+        originalTop: el.style.top,
+      };
+
+      showLegalTargets(card);
+      el.classList.add('dragging');
+      el.style.zIndex = String(++highestZ);
+      game.appendChild(el);
+      moveDraggedCard(event.clientX - gameRect.left, event.clientY - gameRect.top);
+      el.setPointerCapture(event.pointerId);
+    }
+
+    function onPointerMove(event) {
+      if (!drag) return;
+      const gameRect = game.getBoundingClientRect();
+      moveDraggedCard(event.clientX - gameRect.left, event.clientY - gameRect.top);
+    }
+
+    function onPointerUp(event) {
+      if (!drag) return;
+
+      const el = drag.el;
+      const card = drag.card;
+      el.classList.remove('dragging');
+      clearLegalTargets();
+
+      el.style.pointerEvents = 'none';
+      const dropTarget = document.elementFromPoint(event.clientX, event.clientY);
+      el.style.pointerEvents = '';
+      const cell = dropTarget?.closest?.('.cell');
+
+      if (cell) {
+        const row = Number(cell.dataset.row);
+        const col = Number(cell.dataset.col);
+        if (isLegalMove(card, row, col)) {
+          grid[drag.originalRow][drag.originalCol] = null;
+          placeCard(card, row, col);
+          checkWin();
+        } else {
+          returnCardHome();
+        }
+      } else {
+        returnCardHome();
+      }
+
+      drag = null;
+      updateStatus();
+    }
+
+    function returnCardHome() {
+      drag.originalParent.appendChild(drag.el);
+      drag.el.style.left = drag.originalLeft;
+      drag.el.style.top = drag.originalTop;
+      positionInCell(drag.card);
+    }
+
+    function moveDraggedCard(x, y) {
+      drag.el.style.left = `${x - drag.offsetX}px`;
+      drag.el.style.top = `${y - drag.offsetY}px`;
+    }
+
+    function showLegalTargets(card) {
+      clearLegalTargets();
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 13; col++) {
+          if (isLegalMove(card, row, col)) cellAt(row, col).classList.add('legal');
+        }
+      }
+    }
+
+    function clearLegalTargets() {
+      document.querySelectorAll('.cell.legal').forEach(cell => cell.classList.remove('legal'));
+    }
+
+    function completedMask() {
+      const keep = Array.from({ length: 4 }, () => Array(13).fill(false));
+
+      for (let row = 0; row < 4; row++) {
+        const first = grid[row][0];
+        if (!first || first.value !== 2) continue;
+
+        keep[row][0] = true;
+        let suit = first.suit;
+        let expected = 3;
+
+        for (let col = 1; col < 13; col++) {
+          const card = grid[row][col];
+          if (!card || card.suit !== suit || card.value !== expected) break;
+          keep[row][col] = true;
+          expected++;
+        }
+      }
+      return keep;
+    }
+
+    async function redeal() {
+      if (gameOver || isAnimating || redealsLeft <= 0) return;
+      isAnimating = true;
+      newGameButton.disabled = true;
+      redealButton.disabled = true;
+      statusText.textContent = 'Kerätään kortit pinoon...';
+      clearSelection();
+
+      const keep = completedMask();
+      const pool = [];
+      const collectAnimations = [];
+
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 13; col++) {
+          const card = grid[row][col];
+          if (card && !keep[row][col]) {
+            pool.push(card);
+            collectAnimations.push(animateCollectToPile(card, pool.length - 1));
+          }
+        }
+      }
+
+      for (const ace of aces) pool.push(ace);
+      await Promise.all(collectAnimations);
+
+      for (const card of pool) {
+        if (card.row !== null) removeCard(card);
+      }
+      aces = [];
+      renderAces();
+
+      statusText.textContent = 'Jaetaan uudelleen...';
+      const shuffled = shuffle(pool);
+      let i = 0;
+      const dealAnimations = [];
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 13; col++) {
+          if (!keep[row][col] && i < shuffled.length) {
+            const card = shuffled[i];
+            placeCard(card, row, col);
+            dealAnimations.push(animateDeal(card, i));
+            i++;
+          }
+        }
+      }
+
+      await Promise.all(dealAnimations);
+      redealsLeft--;
+      statusText.textContent = 'Poistetaan ässät...';
+      await removeAcesAnimated();
+      markLocked(keep);
+      isAnimating = false;
+      newGameButton.disabled = false;
+      updateStatus();
+      checkWin();
+    }
+
+    function animateCollectToPile(card, index) {
+      const el = card.el;
+      const fromRect = el.getBoundingClientRect();
+      const pileRect = acePile.getBoundingClientRect();
+      const dx = pileRect.left - fromRect.left + Math.min(index, 14) * 1.2;
+      const dy = pileRect.top - fromRect.top + Math.min(index, 14) * 1.2;
+      el.classList.add('dealing');
+      el.style.zIndex = String(++highestZ);
+      const animation = el.animate([
+        { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+        { transform: `translate(${dx * .55}px, ${dy * .55 - 28}px) scale(.92)`, opacity: .92 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.78)`, opacity: 1 }
+      ], {
+        duration: 1120,
+        delay: index * 42,
+        easing: 'cubic-bezier(.2,.75,.25,1)',
+        fill: 'forwards'
+      });
+      return animation.finished.finally(() => {
+        el.classList.remove('dealing');
+      });
+    }
+
+    function clearLocks() {
+      document.querySelectorAll('.cell.locked').forEach(cell => cell.classList.remove('locked'));
+    }
+
+    function markLocked(keep) {
+      clearLocks();
+      for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 13; col++) {
+          if (keep[row][col]) cellAt(row, col).classList.add('locked');
+        }
+      }
+    }
+
+    function checkWin() {
+      for (let row = 0; row < 4; row++) {
+        const first = grid[row][0];
+        if (!first || first.value !== 2) return false;
+        const suit = first.suit;
+        for (let col = 0; col < 12; col++) {
+          const card = grid[row][col];
+          if (!card || card.suit !== suit || card.value !== col + 2) return false;
+        }
+        if (grid[row][12] !== null) return false;
+      }
+
+      gameOver = true;
+      statusText.textContent = 'Voitto! Kaikki maat ovat riveissä 2–K.';
+      redealButton.disabled = true;
+      showWinCelebration();
+      return true;
+    }
+
+    function showWinCelebration() {
+      winBurst.innerHTML = '';
+      const colors = ['#ff4d4d', '#ffe66d', '#75f0ff', '#9bff75', '#ff8cff'];
+      for (let i = 0; i < 70; i++) {
+        const spark = document.createElement('span');
+        spark.className = 'spark';
+        const angle = (Math.PI * 2 * i) / 70;
+        const distance = 110 + Math.random() * 190;
+        spark.style.setProperty('--x', `${Math.cos(angle) * distance}px`);
+        spark.style.setProperty('--y', `${Math.sin(angle) * distance}px`);
+        spark.style.color = colors[i % colors.length];
+        spark.style.animationDelay = `${Math.random() * 280}ms`;
+        winBurst.appendChild(spark);
+      }
+      winOverlay.classList.add('show');
+      winOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideWinCelebration() {
+      winOverlay.classList.remove('show');
+      winOverlay.setAttribute('aria-hidden', 'true');
+      winBurst.innerHTML = '';
+    }
+
+    function updateStatus() {
+      if (gameOver) return;
+      const emptyCount = grid.flat().filter(card => card === null).length;
+      statusText.textContent = `Aukkoja ${emptyCount}. Resettejä jäljellä ${redealsLeft}.`;
+      redealButton.disabled = redealsLeft <= 0;
+      if (redealsLeft <= 0 && !hasAnyLegalMove()) {
+        gameOver = true;
+        statusText.textContent = 'Peli loppui: ei siirtoja eikä resettejä jäljellä.';
+      }
+    }
+
+    function hasAnyLegalMove() {
+      const movable = cards.filter(card => card.value !== 1 && card.row !== null);
+      for (const card of movable) {
+        for (let row = 0; row < 4; row++) {
+          for (let col = 0; col < 13; col++) {
+            if (isLegalMove(card, row, col)) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    game.addEventListener('click', event => {
+      if (!event.target.closest('.card') && !event.target.closest('.cell')) {
+        clearSelection();
+        updateStatus();
+      }
+    });
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    newGameButton.addEventListener('click', newGame);
+    redealButton.addEventListener('click', redeal);
+
+    setupBoard();
+    redealButton.disabled = true;
+  </script>
+</body>
+</html>
