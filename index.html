@@ -508,6 +508,7 @@
     let drag = null;
     let highestZ = 100;
     let gameOver = false;
+    let hasStarted = false;
     let isAnimating = false;
     let selectedCard = null;
 
@@ -710,6 +711,7 @@
       aces = [];
       redealsLeft = 2;
       gameOver = false;
+      hasStarted = true;
 
       await sleep(350);
 
@@ -1012,60 +1014,84 @@
     }
 
     async function redeal() {
+      if (!hasStarted) {
+        statusText.textContent = 'Aloita ensin uusi peli.';
+        return;
+      }
       if (gameOver || isAnimating || redealsLeft <= 0) return;
+
       isAnimating = true;
       newGameButton.disabled = true;
       redealButton.disabled = true;
       statusText.textContent = 'Kerätään kortit pinoon...';
       clearSelection();
 
-      const keep = completedMask();
-      const pool = [];
-      const collectAnimations = [];
+      try {
+        const keep = completedMask();
+        const pool = [];
+        const collectAnimations = [];
 
-      for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < 13; col++) {
-          const card = grid[row][col];
-          if (card && !keep[row][col]) {
-            pool.push(card);
-            collectAnimations.push(animateCollectToPile(card, pool.length - 1));
+        // Kerätään kaikki kortit, jotka eivät kuulu valmiisiin 2→eteenpäin ketjuihin.
+        for (let row = 0; row < 4; row++) {
+          for (let col = 0; col < 13; col++) {
+            const card = grid[row][col];
+            if (card && !keep[row][col]) {
+              pool.push(card);
+              collectAnimations.push(animateCollectToPile(card, pool.length - 1));
+            }
           }
         }
-      }
 
-      for (const ace of aces) pool.push(ace);
-      await Promise.all(collectAnimations);
+        // Ässät ovat sivupinossa. Ne otetaan mukaan uuteen jakoon.
+        for (const ace of aces) {
+          if (!pool.includes(ace)) pool.push(ace);
+        }
 
-      for (const card of pool) {
-        if (card.row !== null) removeCard(card);
-      }
-      aces = [];
-      renderAces();
+        await Promise.all(collectAnimations);
 
-      statusText.textContent = 'Jaetaan uudelleen...';
-      const shuffled = shuffle(pool);
-      let i = 0;
-      const dealAnimations = [];
-      for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < 13; col++) {
-          if (!keep[row][col] && i < shuffled.length) {
-            const card = shuffled[i];
-            placeCard(card, row, col);
-            dealAnimations.push(animateDeal(card, i));
-            i++;
+        // Tyhjennetään vain uudelleen jaettavat paikat. Valmiit ketjut jäävät pöytään.
+        for (const card of pool) {
+          card.el?.getAnimations().forEach(animation => animation.cancel());
+          if (card.row !== null && card.col !== null && grid[card.row][card.col] === card) {
+            grid[card.row][card.col] = null;
+            cellAt(card.row, card.col).classList.remove('filled', 'legal');
+          }
+          card.row = null;
+          card.col = null;
+          card.el?.remove();
+        }
+
+        aces = [];
+        acePile.innerHTML = '';
+
+        statusText.textContent = 'Jaetaan uudelleen...';
+        const shuffled = shuffle(pool);
+        let i = 0;
+        const dealAnimations = [];
+
+        for (let row = 0; row < 4; row++) {
+          for (let col = 0; col < 13; col++) {
+            if (!keep[row][col] && i < shuffled.length) {
+              const card = shuffled[i];
+              placeCard(card, row, col);
+              dealAnimations.push(animateDeal(card, i));
+              i++;
+            }
           }
         }
-      }
 
-      await Promise.all(dealAnimations);
-      redealsLeft--;
-      statusText.textContent = 'Poistetaan ässät...';
-      await removeAcesAnimated();
-      markLocked(keep);
-      isAnimating = false;
-      newGameButton.disabled = false;
-      updateStatus();
-      checkWin();
+        await Promise.all(dealAnimations);
+        redealsLeft--;
+
+        statusText.textContent = 'Poistetaan ässät...';
+        await removeAcesAnimated();
+        markLocked(completedMask());
+        checkWin();
+      } finally {
+        isAnimating = false;
+        newGameButton.disabled = false;
+        updateStatus();
+      }
     }
 
     function animateCollectToPile(card, index) {
@@ -1148,13 +1174,19 @@
     }
 
     function updateStatus() {
+      if (!hasStarted) {
+        redealButton.disabled = true;
+        statusText.textContent = 'Paina Uusi peli aloittaaksesi.';
+        return;
+      }
       if (gameOver) return;
       const emptyCount = grid.flat().filter(card => card === null).length;
       statusText.textContent = `Aukkoja ${emptyCount}. Resettejä jäljellä ${redealsLeft}.`;
-      redealButton.disabled = redealsLeft <= 0;
+      redealButton.disabled = isAnimating || redealsLeft <= 0;
       if (redealsLeft <= 0 && !hasAnyLegalMove()) {
         gameOver = true;
         statusText.textContent = 'Peli loppui: ei siirtoja eikä resettejä jäljellä.';
+        redealButton.disabled = true;
       }
     }
 
